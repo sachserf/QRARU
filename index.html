@@ -1,0 +1,2236 @@
+<!DOCTYPE html>
+<html lang="de">
+
+<head>
+
+<meta charset="utf-8">
+
+<meta name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover">
+
+<title>Gerät erfassen</title>
+
+<meta name="theme-color" content="#1976d2">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Geräte">
+
+<style>
+
+  * { -webkit-tap-highlight-color: rgba(0,0,0,.05); }
+
+  body {
+    font-family: Arial, Helvetica, sans-serif;
+    background: #f5f5f5;
+    margin: 0;
+    padding: 0 0 80px;
+    color: #222;
+  }
+
+  /* =========================
+     KOPFZEILE
+     ========================= */
+
+  .topbar {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+
+    display: flex;
+    align-items: center;
+    gap: 10px;
+
+    padding: 12px 16px;
+    padding-top: calc(12px + env(safe-area-inset-top));
+
+    background: #1976d2;
+    color: white;
+  }
+
+  .topbar h1 {
+    font-size: 17px;
+    margin: 0;
+    flex: 1;
+    text-align: left;
+    font-weight: bold;
+  }
+
+  .pill {
+    font-size: 13px;
+    padding: 5px 10px;
+    border-radius: 20px;
+    background: rgba(255,255,255,.22);
+    white-space: nowrap;
+  }
+
+  .pill.offline {
+    background: #b26a00;
+  }
+
+  .updatebar {
+    display: none;
+    padding: 12px 16px;
+    background: #fff8e1;
+    border-bottom: 1px solid #ffe082;
+    font-size: 15px;
+    text-align: center;
+  }
+
+  .updatebar button {
+    width: auto;
+    margin-left: 10px;
+    padding: 8px 14px;
+    font-size: 15px;
+  }
+
+  /* =========================
+     GRUNDGERÜST
+     ========================= */
+
+  .card {
+    max-width: 520px;
+    margin: 16px auto;
+    background: white;
+    border-radius: 16px;
+    padding: 20px;
+    box-shadow: 0 3px 15px rgba(0,0,0,.12);
+    box-sizing: border-box;
+  }
+
+  .view { display: none; }
+  .view.active { display: block; }
+
+  .device {
+    font-size: 24px;
+    font-weight: bold;
+    margin: 0 0 6px;
+    padding: 15px;
+    background: #eee;
+    border-radius: 10px;
+    text-align: center;
+    word-break: break-all;
+  }
+
+  .device.empty {
+    color: #888;
+    font-weight: normal;
+    font-size: 18px;
+  }
+
+  .name {
+    font-size: 17px;
+    color: #555;
+    text-align: center;
+    margin-bottom: 4px;
+    min-height: 22px;
+  }
+
+  .name.warn { color: #b26a00; }
+
+  .section { text-align: left; margin-top: 22px; }
+
+  .section-title {
+    font-size: 17px;
+    font-weight: bold;
+    margin-bottom: 10px;
+  }
+
+  /* =========================
+     AUSWAHLFELDER
+     ========================= */
+
+  .option,
+  .checkbox-option {
+    display: flex;
+    align-items: center;
+    padding: 14px;
+    margin-bottom: 10px;
+    background: #f5f5f5;
+    border: 2px solid #ddd;
+    border-radius: 10px;
+    cursor: pointer;
+    box-sizing: border-box;
+  }
+
+  .option input,
+  .checkbox-option input {
+    width: 22px;
+    height: 22px;
+    margin: 0 12px 0 0;
+    flex-shrink: 0;
+  }
+
+  .option span,
+  .checkbox-option span { font-size: 18px; }
+
+  .option.selected,
+  .checkbox-option.selected {
+    border-color: #1976d2;
+    background: #e3f2fd;
+  }
+
+  /* =========================
+     TEXT UND BILDER
+     ========================= */
+
+  textarea, input[type="text"] {
+    width: 100%;
+    box-sizing: border-box;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 17px;
+    padding: 12px;
+    border: 1px solid #ccc;
+    border-radius: 10px;
+    background: white;
+  }
+
+  textarea {
+    min-height: 90px;
+    resize: vertical;
+  }
+
+  textarea:focus, input[type="text"]:focus {
+    outline: none;
+    border-color: #1976d2;
+  }
+
+  .image-button {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 15px;
+    background: #f5f5f5;
+    border: 2px dashed #aaa;
+    border-radius: 10px;
+    text-align: center;
+    font-size: 17px;
+    color: #444;
+    cursor: pointer;
+  }
+
+  #imageInput { display: none; }
+
+  #imagePreview {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    margin-top: 12px;
+  }
+
+  .preview-item {
+    position: relative;
+    aspect-ratio: 1 / 1;
+    border-radius: 8px;
+    overflow: hidden;
+    background: #eee;
+  }
+
+  .preview-item img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .remove-image {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: rgba(0,0,0,.7);
+    color: white;
+    font-size: 20px;
+    line-height: 30px;
+    text-align: center;
+    cursor: pointer;
+  }
+
+  .image-count {
+    font-size: 14px;
+    color: #777;
+    margin-top: 8px;
+  }
+
+  .hint {
+    font-size: 13px;
+    color: #777;
+    margin-top: 6px;
+  }
+
+  /* =========================
+     STATUS UND KNÖPFE
+     ========================= */
+
+  #status {
+    margin-top: 22px;
+    font-size: 17px;
+    min-height: 24px;
+    text-align: center;
+  }
+
+  .success { color: #16803c; }
+  .error { color: #c62828; }
+  .warn { color: #b26a00; }
+
+  button {
+    width: 100%;
+    font-size: 18px;
+    padding: 15px 20px;
+    border: none;
+    border-radius: 10px;
+    background: #1976d2;
+    color: white;
+    cursor: pointer;
+    font-family: inherit;
+  }
+
+  button:disabled {
+    background: #aaa;
+    cursor: not-allowed;
+  }
+
+  button.secondary {
+    background: #eceff1;
+    color: #333;
+  }
+
+  button.small {
+    width: auto;
+    font-size: 15px;
+    padding: 10px 14px;
+  }
+
+  button:focus-visible {
+    outline: 3px solid #0d47a1;
+    outline-offset: 2px;
+  }
+
+  .button-row {
+    display: flex;
+    gap: 10px;
+    margin-top: 14px;
+  }
+
+  .gps {
+    margin-top: 16px;
+    padding: 12px;
+    border-radius: 10px;
+    background: #f5f5f5;
+    font-size: 15px;
+    color: #555;
+    text-align: center;
+  }
+
+  .gps.ready { background: #e8f5e9; color: #1b5e20; }
+  .gps.bad { background: #fff3e0; color: #8d4b00; }
+
+  /* =========================
+     WARTESCHLANGE
+     ========================= */
+
+  .queue-summary {
+    font-size: 16px;
+    margin-bottom: 14px;
+    text-align: center;
+    color: #555;
+  }
+
+  .entry {
+    border: 1px solid #e0e0e0;
+    border-left: 5px solid #bdbdbd;
+    border-radius: 10px;
+    padding: 12px 14px;
+    margin-bottom: 10px;
+    text-align: left;
+  }
+
+  .entry.pending { border-left-color: #1976d2; }
+  .entry.uploading { border-left-color: #6a1b9a; }
+  .entry.done { border-left-color: #16803c; }
+  .entry.failed { border-left-color: #c62828; }
+
+  .entry-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 10px;
+  }
+
+  .entry-device { font-weight: bold; font-size: 17px; }
+
+  .entry-state { font-size: 13px; color: #666; white-space: nowrap; }
+
+  .entry-meta {
+    font-size: 14px;
+    color: #666;
+    margin-top: 4px;
+  }
+
+  .entry-error {
+    font-size: 14px;
+    color: #c62828;
+    margin-top: 6px;
+  }
+
+  .entry-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+  }
+
+  .empty-state {
+    text-align: center;
+    color: #777;
+    font-size: 16px;
+    padding: 30px 10px;
+  }
+
+  /* =========================
+     UNTERE LEISTE
+     ========================= */
+
+  .tabbar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 20;
+
+    display: flex;
+    background: white;
+    border-top: 1px solid #ddd;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .tabbar button {
+    flex: 1;
+    background: white;
+    color: #666;
+    border-radius: 0;
+    font-size: 15px;
+    padding: 14px 6px;
+  }
+
+  .tabbar button.active {
+    color: #1976d2;
+    font-weight: bold;
+    box-shadow: inset 0 -3px 0 #1976d2;
+  }
+
+  .badge {
+    display: inline-block;
+    min-width: 20px;
+    padding: 1px 6px;
+    margin-left: 5px;
+    border-radius: 20px;
+    background: #c62828;
+    color: white;
+    font-size: 13px;
+  }
+
+  .badge.hidden { display: none; }
+
+  /* =========================
+     SCANNER
+     ========================= */
+
+  .scanner {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    background: #000;
+  }
+
+  .scanner.active { display: block; }
+
+  .scanner video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .scanner-frame {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 65vw;
+    height: 65vw;
+    max-width: 320px;
+    max-height: 320px;
+    transform: translate(-50%, -50%);
+    border: 3px solid rgba(255,255,255,.9);
+    border-radius: 16px;
+    box-shadow: 0 0 0 100vmax rgba(0,0,0,.45);
+  }
+
+  .scanner-bar {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    padding: 20px;
+    padding-bottom: calc(20px + env(safe-area-inset-bottom));
+    background: rgba(0,0,0,.65);
+    color: white;
+    text-align: center;
+  }
+
+  .scanner-bar p { margin: 0 0 14px; font-size: 16px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; }
+  }
+
+</style>
+
+</head>
+
+
+<body>
+
+<div class="topbar">
+  <h1>Gerät erfassen</h1>
+  <span id="gpsPill" class="pill">GPS …</span>
+  <span id="netPill" class="pill">…</span>
+</div>
+
+<div id="updateBar" class="updatebar">
+  Neue Version verfügbar.
+  <button class="small" onclick="location.reload()">Neu laden</button>
+</div>
+
+
+<!-- ==================================================================
+     ANSICHT 1: ERFASSEN
+     ================================================================== -->
+
+<div id="viewCapture" class="view active">
+
+  <div class="card">
+
+    <div id="deviceBox" class="device empty">Kein Gerät ausgewählt</div>
+
+    <div id="deviceName" class="name"></div>
+
+    <div class="button-row">
+      <button class="secondary" onclick="openScanner()">QR-Code scannen</button>
+      <button class="secondary" onclick="promptDeviceId()">ID eingeben</button>
+    </div>
+
+
+    <div class="section">
+
+      <div class="section-title">Aktion *</div>
+
+      <label class="option" onclick="selectAction('deployment')">
+        <input type="radio" name="action" value="deployment">
+        <span>Deployment</span>
+      </label>
+
+      <label class="option" onclick="selectAction('check')">
+        <input type="radio" name="action" value="check">
+        <span>Check</span>
+      </label>
+
+      <label class="option" onclick="selectAction('detachment')">
+        <input type="radio" name="action" value="detachment">
+        <span>Detachment</span>
+      </label>
+
+    </div>
+
+
+    <div class="section">
+
+      <div class="section-title">Änderungen (optional)</div>
+
+      <label class="checkbox-option">
+        <input type="checkbox" id="changeSdCard" onchange="updateCheckboxStyle(this)">
+        <span>Change SD-card</span>
+      </label>
+
+      <label class="checkbox-option">
+        <input type="checkbox" id="changeBattery" onchange="updateCheckboxStyle(this)">
+        <span>Change battery</span>
+      </label>
+
+    </div>
+
+
+    <div class="section">
+
+      <div class="section-title">Bilder (optional)</div>
+
+      <label class="image-button" for="imageInput">
+        📷 Bilder auswählen oder aufnehmen
+      </label>
+
+      <input type="file"
+             id="imageInput"
+             accept="image/*"
+             multiple
+             onchange="imagesSelected(event)">
+
+      <div id="imagePreview"></div>
+
+      <div id="imageCount" class="image-count"></div>
+
+      <div class="hint">
+        Bilder werden sofort verkleinert und auf dem Handy gespeichert.
+        Maximal 10 Bilder.
+      </div>
+
+    </div>
+
+
+    <div class="section">
+
+      <div class="section-title">Kommentar (optional)</div>
+
+      <textarea id="comment"
+                placeholder="Optionalen Kommentar eingeben …"></textarea>
+
+    </div>
+
+
+    <div id="gpsBox" class="gps">Standort wird gesucht …</div>
+
+    <div id="status">Bitte Gerät wählen und Aktion auswählen.</div>
+
+    <button id="saveButton" onclick="saveEntry()" disabled>Speichern</button>
+
+    <div class="button-row" id="afterSaveRow" style="display:none;">
+      <button class="secondary" onclick="resetForm(true)">Nächstes Gerät</button>
+    </div>
+
+  </div>
+
+</div>
+
+
+<!-- ==================================================================
+     ANSICHT 2: WARTESCHLANGE
+     ================================================================== -->
+
+<div id="viewQueue" class="view">
+
+  <div class="card">
+
+    <div class="section-title">Warteschlange</div>
+
+    <div id="queueSummary" class="queue-summary"></div>
+
+    <button id="syncButton" onclick="syncNow(true)">Jetzt hochladen</button>
+
+    <div id="queueList" style="margin-top:18px;"></div>
+
+    <div class="hint" id="storageHint"></div>
+
+  </div>
+
+</div>
+
+
+<!-- ==================================================================
+     SCANNER
+     ================================================================== -->
+
+<div id="scanner" class="scanner">
+
+  <video id="scannerVideo" playsinline muted></video>
+
+  <div class="scanner-frame"></div>
+
+  <div class="scanner-bar">
+    <p id="scannerHint">QR-Code in den Rahmen halten</p>
+    <button class="secondary" onclick="closeScanner()">Abbrechen</button>
+  </div>
+
+</div>
+
+
+<div class="tabbar">
+  <button id="tabCapture" class="active" onclick="showView('capture')">Erfassen</button>
+  <button id="tabQueue" onclick="showView('queue')">
+    Warteschlange<span id="queueBadge" class="badge hidden">0</span>
+  </button>
+</div>
+
+
+<!-- Optionaler QR-Fallback für Browser ohne BarcodeDetector (z. B. iOS).
+     Datei jsQR.js in denselben Ordner legen; fehlt sie, bleibt alles
+     andere funktionsfähig. -->
+<script src="jsQR.js" onerror="window.__jsqrMissing = true;"></script>
+
+
+<script>
+"use strict";
+
+/* ======================================================================
+   KONFIGURATION – bitte anpassen
+   ====================================================================== */
+
+const CONFIG = {
+
+  // Die /exec-Adresse der Apps-Script-Web-App.
+  apiUrl: 'https://script.google.com/macros/s/HIER_DEPLOYMENT_ID/exec',
+
+  // Muss exakt mit API_TOKEN in Code.gs übereinstimmen.
+  token: 'HIER_EIN_LANGES_ZUFALLSTOKEN_EINTRAGEN',
+
+  maxImages: 10,
+  imageMaxSize: 1600,
+  imageQuality: 0.8,
+
+  // Erledigte Einträge werden nach so vielen Tagen aufgeräumt.
+  keepDoneDays: 7,
+
+  // Ab so vielen Metern Ungenauigkeit wird gewarnt.
+  gpsWarnAccuracy: 100
+};
+
+
+/* ======================================================================
+   KLEINE HELFER
+   ====================================================================== */
+
+const $ = function (id) { return document.getElementById(id); };
+
+function uuid() {
+
+  if (window.crypto && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
+
+function formatDateTime(iso) {
+
+  const date = new Date(iso);
+
+  if (isNaN(date.getTime())) {
+    return '–';
+  }
+
+  return date.toLocaleString('de-DE', {
+    day: '2-digit', month: '2-digit', year: 'numeric',
+    hour: '2-digit', minute: '2-digit'
+  });
+}
+
+function escapeHtml(value) {
+
+  return String(value === null || value === undefined ? '' : value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+
+/* ======================================================================
+   DATENBANK AUF DEM GERÄT
+   ====================================================================== */
+
+const DB_NAME = 'geraete-scanner';
+const DB_VERSION = 1;
+
+let dbPromise = null;
+
+function openDb() {
+
+  if (dbPromise) {
+    return dbPromise;
+  }
+
+  dbPromise = new Promise(function (resolve, reject) {
+
+    const request = indexedDB.open(DB_NAME, DB_VERSION);
+
+    request.onupgradeneeded = function () {
+
+      const db = request.result;
+
+      if (!db.objectStoreNames.contains('scans')) {
+        const scans = db.createObjectStore('scans', { keyPath: 'id' });
+        scans.createIndex('status', 'status');
+      }
+
+      if (!db.objectStoreNames.contains('images')) {
+        const images = db.createObjectStore('images', { keyPath: 'id' });
+        images.createIndex('scanId', 'scanId');
+      }
+
+      if (!db.objectStoreNames.contains('meta')) {
+        db.createObjectStore('meta', { keyPath: 'key' });
+      }
+    };
+
+    request.onsuccess = function () { resolve(request.result); };
+    request.onerror = function () { reject(request.error); };
+  });
+
+  return dbPromise;
+}
+
+function asPromise(request) {
+
+  return new Promise(function (resolve, reject) {
+    request.onsuccess = function () { resolve(request.result); };
+    request.onerror = function () { reject(request.error); };
+  });
+}
+
+async function dbPut(storeName, value) {
+
+  const db = await openDb();
+
+  return new Promise(function (resolve, reject) {
+    const tx = db.transaction(storeName, 'readwrite');
+    tx.objectStore(storeName).put(value);
+    tx.oncomplete = function () { resolve(); };
+    tx.onerror = function () { reject(tx.error); };
+    tx.onabort = function () { reject(tx.error); };
+  });
+}
+
+async function dbGet(storeName, key) {
+
+  const db = await openDb();
+
+  return asPromise(db.transaction(storeName, 'readonly')
+    .objectStore(storeName).get(key));
+}
+
+async function dbGetAll(storeName) {
+
+  const db = await openDb();
+
+  return asPromise(db.transaction(storeName, 'readonly')
+    .objectStore(storeName).getAll());
+}
+
+async function dbGetByIndex(storeName, indexName, value) {
+
+  const db = await openDb();
+
+  return asPromise(db.transaction(storeName, 'readonly')
+    .objectStore(storeName).index(indexName).getAll(value));
+}
+
+async function dbDelete(storeName, key) {
+
+  const db = await openDb();
+
+  return new Promise(function (resolve, reject) {
+    const tx = db.transaction(storeName, 'readwrite');
+    tx.objectStore(storeName).delete(key);
+    tx.oncomplete = function () { resolve(); };
+    tx.onerror = function () { reject(tx.error); };
+  });
+}
+
+/** Schreibt Scan und Bilder in einer einzigen Transaktion. */
+async function dbSaveEntry(scan, images) {
+
+  const db = await openDb();
+
+  return new Promise(function (resolve, reject) {
+
+    const tx = db.transaction(['scans', 'images'], 'readwrite');
+
+    tx.objectStore('scans').put(scan);
+
+    const store = tx.objectStore('images');
+
+    images.forEach(function (image) { store.put(image); });
+
+    tx.oncomplete = function () { resolve(); };
+    tx.onerror = function () { reject(tx.error); };
+    tx.onabort = function () { reject(tx.error); };
+  });
+}
+
+async function dbDeleteEntry(scanId) {
+
+  const images = await dbGetByIndex('images', 'scanId', scanId);
+
+  const db = await openDb();
+
+  return new Promise(function (resolve, reject) {
+
+    const tx = db.transaction(['scans', 'images'], 'readwrite');
+
+    tx.objectStore('scans').delete(scanId);
+
+    const store = tx.objectStore('images');
+
+    images.forEach(function (image) { store.delete(image.id); });
+
+    tx.oncomplete = function () { resolve(); };
+    tx.onerror = function () { reject(tx.error); };
+  });
+}
+
+
+/* ======================================================================
+   VERBINDUNG ZUM SERVER
+   ====================================================================== */
+
+function ApiError(message, permanent) {
+  this.name = 'ApiError';
+  this.message = message;
+  this.permanent = !!permanent;
+}
+
+ApiError.prototype = Object.create(Error.prototype);
+
+async function apiPost(payload, timeoutMs) {
+
+  const controller = new AbortController();
+
+  const timer = setTimeout(function () { controller.abort(); },
+    timeoutMs || 60000);
+
+  try {
+
+    const body = Object.assign({ token: CONFIG.token }, payload);
+
+    const response = await fetch(CONFIG.apiUrl, {
+      method: 'POST',
+      // text/plain vermeidet den CORS-Preflight, den Apps Script
+      // nicht beantworten kann. Der Inhalt bleibt JSON.
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(body),
+      redirect: 'follow',
+      signal: controller.signal
+    });
+
+    if (!response.ok) {
+      throw new ApiError('Server antwortet mit Fehler ' + response.status, false);
+    }
+
+    const text = await response.text();
+
+    let data;
+
+    try {
+      data = JSON.parse(text);
+    } catch (parseError) {
+      throw new ApiError(
+        'Unerwartete Antwort. Ist die Web-App für "Jeder" freigegeben?',
+        false
+      );
+    }
+
+    if (!data.ok) {
+      throw new ApiError(data.error || 'Unbekannter Serverfehler', !!data.permanent);
+    }
+
+    return data;
+
+  } catch (error) {
+
+    if (error instanceof ApiError) {
+      throw error;
+    }
+
+    if (error.name === 'AbortError') {
+      throw new ApiError('Zeitüberschreitung beim Hochladen.', false);
+    }
+
+    throw new ApiError('Keine Verbindung zum Server.', false);
+
+  } finally {
+
+    clearTimeout(timer);
+  }
+}
+
+function blobToBase64(blob) {
+
+  return new Promise(function (resolve, reject) {
+
+    const reader = new FileReader();
+
+    reader.onload = function () {
+      resolve(String(reader.result).split(',')[1]);
+    };
+
+    reader.onerror = function () {
+      reject(new Error('Bild konnte nicht gelesen werden.'));
+    };
+
+    reader.readAsDataURL(blob);
+  });
+}
+
+
+/* ======================================================================
+   ZUSTAND
+   ====================================================================== */
+
+let currentDeviceId = '';
+let deviceList = [];
+let selectedImages = [];
+let lastSavedId = '';
+let syncing = false;
+let lastPosition = null;
+let watchId = null;
+let queueCache = [];
+
+
+/* ======================================================================
+   GERÄTELISTE
+   ====================================================================== */
+
+async function loadDeviceList() {
+
+  const stored = await dbGet('meta', 'devices');
+
+  if (stored && Array.isArray(stored.value)) {
+    deviceList = stored.value;
+  }
+
+  updateDeviceName();
+}
+
+async function refreshDeviceList() {
+
+  if (!navigator.onLine) {
+    return;
+  }
+
+  try {
+
+    const data = await apiPost({ type: 'devices' }, 20000);
+
+    deviceList = data.devices || [];
+
+    await dbPut('meta', {
+      key: 'devices',
+      value: deviceList,
+      updatedAt: new Date().toISOString()
+    });
+
+    updateDeviceName();
+
+  } catch (error) {
+    // Ohne Verbindung bleibt die zuletzt gespeicherte Liste gültig.
+  }
+}
+
+function findDevice(deviceId) {
+
+  const wanted = String(deviceId || '').trim().toLowerCase();
+
+  for (let i = 0; i < deviceList.length; i++) {
+    if (String(deviceList[i].id).toLowerCase() === wanted) {
+      return deviceList[i];
+    }
+  }
+
+  return null;
+}
+
+function updateDeviceName() {
+
+  const box = $('deviceBox');
+  const nameBox = $('deviceName');
+
+  if (!currentDeviceId) {
+
+    box.textContent = 'Kein Gerät ausgewählt';
+    box.className = 'device empty';
+    nameBox.textContent = '';
+    nameBox.className = 'name';
+    return;
+  }
+
+  box.textContent = currentDeviceId;
+  box.className = 'device';
+
+  const device = findDevice(currentDeviceId);
+
+  if (device) {
+    nameBox.textContent = device.name || '';
+    nameBox.className = 'name';
+  } else if (deviceList.length === 0) {
+    nameBox.textContent = 'Geräteliste noch nicht geladen';
+    nameBox.className = 'name warn';
+  } else {
+    nameBox.textContent = 'Nicht in der Geräteliste – bitte ID prüfen';
+    nameBox.className = 'name warn';
+  }
+}
+
+function setDeviceId(value) {
+
+  currentDeviceId = String(value || '').trim()
+    .replace(/^["']+|["']+$/g, '').trim();
+
+  updateDeviceName();
+  updateSaveButton();
+}
+
+function promptDeviceId() {
+
+  const value = window.prompt('Geräte-ID eingeben', currentDeviceId || '');
+
+  if (value !== null) {
+    setDeviceId(value);
+  }
+}
+
+
+/* ======================================================================
+   FORMULAR
+   ====================================================================== */
+
+function setStatus(text, type) {
+
+  const element = $('status');
+
+  element.textContent = text;
+  element.className = type || '';
+}
+
+function selectAction(action) {
+
+  const radios = document.querySelectorAll('input[name="action"]');
+
+  radios.forEach(function (radio) {
+
+    const label = radio.closest('.option');
+
+    if (radio.value === action) {
+      radio.checked = true;
+      label.classList.add('selected');
+    } else {
+      label.classList.remove('selected');
+    }
+  });
+
+  updateSaveButton();
+}
+
+function updateCheckboxStyle(checkbox) {
+
+  const label = checkbox.closest('.checkbox-option');
+
+  if (checkbox.checked) {
+    label.classList.add('selected');
+  } else {
+    label.classList.remove('selected');
+  }
+}
+
+function getSelectedAction() {
+
+  const selected = document.querySelector('input[name="action"]:checked');
+
+  return selected ? selected.value : '';
+}
+
+function updateSaveButton() {
+
+  const action = getSelectedAction();
+  const button = $('saveButton');
+
+  button.disabled = !action || !currentDeviceId;
+
+  if (!currentDeviceId) {
+    setStatus('Bitte zuerst ein Gerät scannen oder die ID eingeben.');
+  } else if (!action) {
+    setStatus('Bitte Aktion auswählen.');
+  } else {
+    setStatus('Bereit. Speichern funktioniert auch ohne Internet.');
+  }
+}
+
+function resetForm(keepDevice) {
+
+  selectAction('');
+
+  document.querySelectorAll('input[name="action"]').forEach(function (radio) {
+    radio.checked = false;
+    radio.closest('.option').classList.remove('selected');
+  });
+
+  ['changeSdCard', 'changeBattery'].forEach(function (id) {
+    const box = $(id);
+    box.checked = false;
+    updateCheckboxStyle(box);
+  });
+
+  $('comment').value = '';
+
+  selectedImages.forEach(function (image) {
+    URL.revokeObjectURL(image.previewUrl);
+  });
+
+  selectedImages = [];
+
+  renderImagePreview();
+
+  if (!keepDevice) {
+    setDeviceId('');
+  }
+
+  $('saveButton').style.display = 'block';
+  $('afterSaveRow').style.display = 'none';
+
+  updateSaveButton();
+}
+
+
+/* ======================================================================
+   BILDER
+   ====================================================================== */
+
+async function imagesSelected(event) {
+
+  const files = Array.from(event.target.files || []);
+
+  event.target.value = '';
+
+  if (!files.length) {
+    return;
+  }
+
+  if (selectedImages.length + files.length > CONFIG.maxImages) {
+    window.alert('Maximal ' + CONFIG.maxImages + ' Bilder pro Scan.');
+    return;
+  }
+
+  for (let i = 0; i < files.length; i++) {
+
+    if (!files[i].type.startsWith('image/')) {
+      continue;
+    }
+
+    setStatus('Bild ' + (i + 1) + ' von ' + files.length + ' wird verkleinert …');
+
+    try {
+
+      const compressed = await compressImage(files[i]);
+
+      selectedImages.push({
+        id: uuid(),
+        blob: compressed.blob,
+        name: compressed.name,
+        type: compressed.type,
+        previewUrl: URL.createObjectURL(compressed.blob)
+      });
+
+    } catch (error) {
+      setStatus(error.message, 'error');
+      return;
+    }
+  }
+
+  renderImagePreview();
+  updateSaveButton();
+}
+
+function removeImage(index) {
+
+  if (selectedImages[index]) {
+    URL.revokeObjectURL(selectedImages[index].previewUrl);
+  }
+
+  selectedImages.splice(index, 1);
+
+  renderImagePreview();
+}
+
+function renderImagePreview() {
+
+  const container = $('imagePreview');
+  const count = $('imageCount');
+
+  container.innerHTML = '';
+
+  selectedImages.forEach(function (item, index) {
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'preview-item';
+
+    const image = document.createElement('img');
+    image.src = item.previewUrl;
+    image.alt = 'Bild ' + (index + 1);
+
+    const remove = document.createElement('div');
+    remove.className = 'remove-image';
+    remove.textContent = '×';
+    remove.onclick = function () { removeImage(index); };
+
+    wrapper.appendChild(image);
+    wrapper.appendChild(remove);
+
+    container.appendChild(wrapper);
+  });
+
+  if (selectedImages.length === 0) {
+    count.textContent = '';
+  } else {
+    count.textContent = selectedImages.length +
+      (selectedImages.length === 1 ? ' Bild gespeichert' : ' Bilder gespeichert');
+  }
+}
+
+/** Verkleinert ein Bild und gibt einen JPEG-Blob zurück. */
+function compressImage(file) {
+
+  return new Promise(function (resolve, reject) {
+
+    const reader = new FileReader();
+
+    reader.onload = function (event) {
+
+      const img = new Image();
+
+      img.onload = function () {
+
+        const maxSize = CONFIG.imageMaxSize;
+
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxSize || height > maxSize) {
+
+          if (width > height) {
+            height = Math.round(height * maxSize / width);
+            width = maxSize;
+          } else {
+            width = Math.round(width * maxSize / height);
+            height = maxSize;
+          }
+        }
+
+        const canvas = document.createElement('canvas');
+
+        canvas.width = width;
+        canvas.height = height;
+
+        canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+
+        canvas.toBlob(function (blob) {
+
+          if (!blob) {
+            reject(new Error('Bild konnte nicht verarbeitet werden.'));
+            return;
+          }
+
+          resolve({
+            blob: blob,
+            name: file.name || 'bild.jpg',
+            type: 'image/jpeg'
+          });
+
+        }, 'image/jpeg', CONFIG.imageQuality);
+      };
+
+      img.onerror = function () {
+        reject(new Error('Bild konnte nicht geladen werden.'));
+      };
+
+      img.src = event.target.result;
+    };
+
+    reader.onerror = function () {
+      reject(new Error('Bild konnte nicht gelesen werden.'));
+    };
+
+    reader.readAsDataURL(file);
+  });
+}
+
+
+/* ======================================================================
+   STANDORT
+   ====================================================================== */
+
+function startGeoWatch() {
+
+  if (!navigator.geolocation || watchId !== null) {
+    return;
+  }
+
+  watchId = navigator.geolocation.watchPosition(
+
+    function (position) {
+      lastPosition = position;
+      updateGpsDisplay();
+    },
+
+    function () {
+      updateGpsDisplay();
+    },
+
+    { enableHighAccuracy: true, maximumAge: 0, timeout: 30000 }
+  );
+}
+
+function stopGeoWatch() {
+
+  if (watchId !== null) {
+    navigator.geolocation.clearWatch(watchId);
+    watchId = null;
+  }
+}
+
+function positionAge() {
+
+  return lastPosition ? Date.now() - lastPosition.timestamp : Infinity;
+}
+
+function updateGpsDisplay() {
+
+  const box = $('gpsBox');
+  const pill = $('gpsPill');
+
+  if (!lastPosition) {
+    box.textContent = 'Standort wird gesucht … (ohne Netz kann das bis zu einer Minute dauern)';
+    box.className = 'gps';
+    pill.textContent = 'GPS …';
+    return;
+  }
+
+  const accuracy = Math.round(lastPosition.coords.accuracy);
+  const ageSeconds = Math.round(positionAge() / 1000);
+
+  pill.textContent = 'GPS ±' + accuracy + ' m';
+
+  box.textContent = 'Standort bereit: ±' + accuracy + ' m, vor ' +
+    ageSeconds + ' s ermittelt';
+
+  box.className = accuracy > CONFIG.gpsWarnAccuracy ? 'gps bad' : 'gps ready';
+}
+
+/** Frischen Fix holen, sonst den letzten brauchbaren verwenden. */
+function getPosition() {
+
+  return new Promise(function (resolve) {
+
+    if (lastPosition && positionAge() < 120000) {
+      resolve(lastPosition);
+      return;
+    }
+
+    if (!navigator.geolocation) {
+      resolve(null);
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+
+      function (position) {
+        lastPosition = position;
+        updateGpsDisplay();
+        resolve(position);
+      },
+
+      function () {
+        resolve(positionAge() < 900000 ? lastPosition : null);
+      },
+
+      { enableHighAccuracy: true, maximumAge: 60000, timeout: 20000 }
+    );
+  });
+}
+
+
+/* ======================================================================
+   SPEICHERN
+   ====================================================================== */
+
+async function saveEntry() {
+
+  const action = getSelectedAction();
+
+  if (!currentDeviceId || !action) {
+    updateSaveButton();
+    return;
+  }
+
+  const button = $('saveButton');
+
+  button.disabled = true;
+
+  setStatus('Standort wird ermittelt …');
+
+  const position = await getPosition();
+
+  if (!position) {
+
+    const proceed = window.confirm(
+      'Kein Standort verfügbar.\n\nEintrag trotzdem ohne Koordinaten speichern?'
+    );
+
+    if (!proceed) {
+      setStatus('Nicht gespeichert. Bitte GPS erlauben und erneut versuchen.', 'error');
+      button.disabled = false;
+      return;
+    }
+  }
+
+  const device = findDevice(currentDeviceId);
+
+  const scanId = uuid();
+
+  const scan = {
+    id: scanId,
+    deviceId: currentDeviceId,
+    deviceName: device ? device.name : '',
+    action: action,
+    changeSdCard: $('changeSdCard').checked,
+    changeBattery: $('changeBattery').checked,
+    comment: $('comment').value.trim(),
+    latitude: position ? position.coords.latitude : null,
+    longitude: position ? position.coords.longitude : null,
+    accuracy: position ? position.coords.accuracy : null,
+    createdAt: new Date().toISOString(),
+    status: 'pending',
+    attempts: 0,
+    lastError: '',
+    imageCount: selectedImages.length
+  };
+
+  const images = selectedImages.map(function (image, index) {
+    return {
+      id: image.id,
+      scanId: scanId,
+      index: index + 1,
+      blob: image.blob,
+      name: image.name,
+      type: image.type,
+      url: null
+    };
+  });
+
+  try {
+
+    await dbSaveEntry(scan, images);
+
+  } catch (error) {
+
+    setStatus('Speichern fehlgeschlagen: ' + error.message +
+      ' Bitte Speicherplatz prüfen.', 'error');
+
+    button.disabled = false;
+    return;
+  }
+
+  lastSavedId = scanId;
+
+  // Vorschau-URLs freigeben, die Blobs liegen jetzt in der Datenbank.
+  selectedImages.forEach(function (image) {
+    URL.revokeObjectURL(image.previewUrl);
+  });
+
+  selectedImages = [];
+
+  renderImagePreview();
+
+  button.style.display = 'none';
+  $('afterSaveRow').style.display = 'flex';
+
+  setStatus(
+    navigator.onLine
+      ? '✓ Gespeichert. Wird jetzt hochgeladen …'
+      : '✓ Auf dem Handy gespeichert. Upload erfolgt, sobald Netz da ist.',
+    'success'
+  );
+
+  await refreshQueue();
+
+  syncNow(false);
+}
+
+
+/* ======================================================================
+   WARTESCHLANGE UND UPLOAD
+   ====================================================================== */
+
+async function refreshQueue() {
+
+  const scans = await dbGetAll('scans');
+
+  scans.sort(function (a, b) {
+    return String(b.createdAt).localeCompare(String(a.createdAt));
+  });
+
+  queueCache = scans;
+
+  renderQueue();
+}
+
+function pendingCount() {
+
+  return queueCache.filter(function (scan) {
+    return scan.status === 'pending' || scan.status === 'uploading';
+  }).length;
+}
+
+function failedCount() {
+
+  return queueCache.filter(function (scan) {
+    return scan.status === 'failed';
+  }).length;
+}
+
+function stateLabel(scan) {
+
+  if (scan.status === 'pending') {
+    return scan.attempts > 0 ? 'wartet (Versuch ' + scan.attempts + ')' : 'wartet';
+  }
+
+  if (scan.status === 'uploading') {
+    return 'wird hochgeladen …';
+  }
+
+  if (scan.status === 'done') {
+    return '✓ hochgeladen';
+  }
+
+  return 'Fehler';
+}
+
+function renderQueue() {
+
+  const open = pendingCount();
+  const failed = failedCount();
+
+  const badge = $('queueBadge');
+
+  if (open + failed > 0) {
+    badge.textContent = String(open + failed);
+    badge.className = 'badge';
+  } else {
+    badge.className = 'badge hidden';
+  }
+
+  const summary = [];
+
+  if (open > 0) {
+    summary.push(open + (open === 1 ? ' Eintrag offen' : ' Einträge offen'));
+  }
+
+  if (failed > 0) {
+    summary.push(failed + (failed === 1 ? ' Fehler' : ' Fehler'));
+  }
+
+  $('queueSummary').textContent = summary.length
+    ? summary.join(' · ')
+    : 'Alles hochgeladen.';
+
+  $('syncButton').disabled = syncing || (open === 0);
+  $('syncButton').textContent = syncing ? 'Upload läuft …' : 'Jetzt hochladen';
+
+  const list = $('queueList');
+
+  if (queueCache.length === 0) {
+    list.innerHTML = '<div class="empty-state">Noch keine Einträge erfasst.</div>';
+    return;
+  }
+
+  list.innerHTML = queueCache.map(function (scan) {
+
+    const meta = [
+      scan.action,
+      formatDateTime(scan.createdAt),
+      scan.imageCount ? scan.imageCount + ' Bilder' : null,
+      (scan.latitude === null || scan.latitude === undefined) ? 'ohne GPS' : null
+    ].filter(Boolean).join(' · ');
+
+    const actions = scan.status === 'failed'
+      ? '<div class="entry-actions">' +
+        '<button class="small secondary" onclick="retryEntry(\'' + scan.id + '\')">Erneut versuchen</button>' +
+        '<button class="small secondary" onclick="deleteEntry(\'' + scan.id + '\')">Löschen</button>' +
+        '</div>'
+      : '';
+
+    const errorLine = scan.lastError
+      ? '<div class="entry-error">' + escapeHtml(scan.lastError) + '</div>'
+      : '';
+
+    return '<div class="entry ' + scan.status + '">' +
+      '<div class="entry-head">' +
+        '<span class="entry-device">' + escapeHtml(scan.deviceId) + '</span>' +
+        '<span class="entry-state">' + stateLabel(scan) + '</span>' +
+      '</div>' +
+      '<div class="entry-meta">' + escapeHtml(meta) + '</div>' +
+      errorLine +
+      actions +
+      '</div>';
+
+  }).join('');
+}
+
+async function retryEntry(scanId) {
+
+  const scan = await dbGet('scans', scanId);
+
+  if (!scan) {
+    return;
+  }
+
+  scan.status = 'pending';
+  scan.lastError = '';
+
+  await dbPut('scans', scan);
+  await refreshQueue();
+
+  syncNow(true);
+}
+
+async function deleteEntry(scanId) {
+
+  if (!window.confirm('Diesen Eintrag endgültig löschen? Er wird dann nicht hochgeladen.')) {
+    return;
+  }
+
+  await dbDeleteEntry(scanId);
+  await refreshQueue();
+}
+
+/** Lädt einen Eintrag hoch: erst die Bilder einzeln, dann die Zeile. */
+async function uploadScan(scan) {
+
+  const images = await dbGetByIndex('images', 'scanId', scan.id);
+
+  images.sort(function (a, b) { return a.index - b.index; });
+
+  const urls = [];
+
+  for (let i = 0; i < images.length; i++) {
+
+    const image = images[i];
+
+    if (!image.url) {
+
+      setStatus('Bild ' + (i + 1) + ' von ' + images.length + ' wird hochgeladen …');
+
+      const data = await blobToBase64(image.blob);
+
+      const result = await apiPost({
+        type: 'image',
+        imageId: image.id,
+        scanId: scan.id,
+        deviceId: scan.deviceId,
+        capturedAt: scan.createdAt,
+        index: image.index,
+        contentType: image.type,
+        data: data
+      }, 120000);
+
+      image.url = result.url;
+
+      // Sofort merken, damit ein Abbruch danach nichts wiederholt.
+      await dbPut('images', image);
+    }
+
+    urls.push(image.url);
+  }
+
+  await apiPost({
+    type: 'scan',
+    scanId: scan.id,
+    deviceId: scan.deviceId,
+    action: scan.action,
+    changeSdCard: scan.changeSdCard,
+    changeBattery: scan.changeBattery,
+    comment: scan.comment,
+    capturedAt: scan.createdAt,
+    latitude: scan.latitude,
+    longitude: scan.longitude,
+    accuracy: scan.accuracy,
+    imageUrls: urls
+  }, 60000);
+}
+
+async function syncNow(manual) {
+
+  if (syncing) {
+    return;
+  }
+
+  if (!navigator.onLine && !manual) {
+    return;
+  }
+
+  const queue = (await dbGetAll('scans'))
+    .filter(function (scan) {
+      return scan.status === 'pending' || scan.status === 'uploading';
+    })
+    .sort(function (a, b) {
+      return String(a.createdAt).localeCompare(String(b.createdAt));
+    });
+
+  if (queue.length === 0) {
+    await purgeOldEntries();
+    await refreshQueue();
+    return;
+  }
+
+  syncing = true;
+
+  renderQueue();
+
+  let uploaded = 0;
+  let stopped = false;
+
+  for (let i = 0; i < queue.length && !stopped; i++) {
+
+    const scan = queue[i];
+
+    scan.status = 'uploading';
+    scan.attempts = (scan.attempts || 0) + 1;
+
+    await dbPut('scans', scan);
+    await refreshQueue();
+
+    try {
+
+      await uploadScan(scan);
+
+      scan.status = 'done';
+      scan.lastError = '';
+      scan.uploadedAt = new Date().toISOString();
+
+      await dbPut('scans', scan);
+
+      // Bilddaten werden nach dem Upload nicht mehr gebraucht.
+      const images = await dbGetByIndex('images', 'scanId', scan.id);
+
+      for (let j = 0; j < images.length; j++) {
+        await dbDelete('images', images[j].id);
+      }
+
+      uploaded++;
+
+    } catch (error) {
+
+      scan.lastError = error.message;
+
+      if (error.permanent) {
+
+        // Inhaltlicher Fehler, etwa unbekannte Geräte-ID.
+        // Der Eintrag bleibt erhalten und wartet auf Korrektur.
+        scan.status = 'failed';
+
+      } else {
+
+        scan.status = 'pending';
+        stopped = true;
+      }
+
+      await dbPut('scans', scan);
+    }
+
+    await refreshQueue();
+  }
+
+  syncing = false;
+
+  await purgeOldEntries();
+  await refreshQueue();
+
+  if (uploaded > 0 && $('viewCapture').classList.contains('active') && lastSavedId) {
+    setStatus('✓ ' + uploaded + (uploaded === 1 ? ' Eintrag hochgeladen' :
+      ' Einträge hochgeladen'), 'success');
+  }
+}
+
+/** Erledigte Einträge nach einigen Tagen entfernen. */
+async function purgeOldEntries() {
+
+  const limit = Date.now() - CONFIG.keepDoneDays * 86400000;
+
+  const scans = await dbGetAll('scans');
+
+  for (let i = 0; i < scans.length; i++) {
+
+    const scan = scans[i];
+
+    if (scan.status === 'done' && new Date(scan.uploadedAt || scan.createdAt).getTime() < limit) {
+      await dbDeleteEntry(scan.id);
+    }
+  }
+}
+
+
+/* ======================================================================
+   QR-SCANNER
+   ====================================================================== */
+
+let scannerStream = null;
+let scannerActive = false;
+let barcodeDetector = null;
+
+async function openScanner() {
+
+  const overlay = $('scanner');
+  const video = $('scannerVideo');
+
+  overlay.classList.add('active');
+
+  $('scannerHint').textContent = 'Kamera wird gestartet …';
+
+  try {
+
+    scannerStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' } },
+      audio: false
+    });
+
+  } catch (error) {
+
+    closeScanner();
+
+    window.alert('Kamera nicht verfügbar. Bitte die Geräte-ID von Hand eingeben.');
+
+    promptDeviceId();
+    return;
+  }
+
+  video.srcObject = scannerStream;
+
+  await video.play();
+
+  scannerActive = true;
+
+  if (!barcodeDetector && 'BarcodeDetector' in window) {
+
+    try {
+
+      const formats = await window.BarcodeDetector.getSupportedFormats();
+
+      if (formats.indexOf('qr_code') !== -1) {
+        barcodeDetector = new window.BarcodeDetector({ formats: ['qr_code'] });
+      }
+
+    } catch (error) {
+      barcodeDetector = null;
+    }
+  }
+
+  if (!barcodeDetector && typeof window.jsQR !== 'function') {
+
+    $('scannerHint').textContent =
+      'Dieser Browser kann keine QR-Codes lesen. Bitte ID von Hand eingeben.';
+
+    return;
+  }
+
+  $('scannerHint').textContent = 'QR-Code in den Rahmen halten';
+
+  scanLoop();
+}
+
+function closeScanner() {
+
+  scannerActive = false;
+
+  if (scannerStream) {
+    scannerStream.getTracks().forEach(function (track) { track.stop(); });
+    scannerStream = null;
+  }
+
+  $('scannerVideo').srcObject = null;
+  $('scanner').classList.remove('active');
+}
+
+function scanLoop() {
+
+  if (!scannerActive) {
+    return;
+  }
+
+  detectFrame().then(function (text) {
+
+    if (!scannerActive) {
+      return;
+    }
+
+    if (text) {
+
+      const id = deviceIdFromScan(text);
+
+      if (id) {
+
+        if (navigator.vibrate) {
+          navigator.vibrate(60);
+        }
+
+        closeScanner();
+        setDeviceId(id);
+        showView('capture');
+        return;
+      }
+    }
+
+    setTimeout(scanLoop, 200);
+  });
+}
+
+async function detectFrame() {
+
+  const video = $('scannerVideo');
+
+  if (!video.videoWidth) {
+    return '';
+  }
+
+  if (barcodeDetector) {
+
+    try {
+
+      const codes = await barcodeDetector.detect(video);
+
+      return codes.length ? codes[0].rawValue : '';
+
+    } catch (error) {
+      return '';
+    }
+  }
+
+  if (typeof window.jsQR === 'function') {
+
+    const canvas = document.createElement('canvas');
+
+    const width = Math.min(video.videoWidth, 640);
+    const scale = width / video.videoWidth;
+
+    canvas.width = width;
+    canvas.height = Math.round(video.videoHeight * scale);
+
+    const context = canvas.getContext('2d');
+
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+
+    const code = window.jsQR(imageData.data, imageData.width, imageData.height);
+
+    return code ? code.data : '';
+  }
+
+  return '';
+}
+
+/** Akzeptiert sowohl eine nackte ID als auch eine URL mit ?id=… */
+function deviceIdFromScan(text) {
+
+  const raw = String(text || '').trim();
+
+  if (!raw) {
+    return '';
+  }
+
+  if (/^https?:\/\//i.test(raw)) {
+
+    try {
+
+      const url = new URL(raw);
+      const id = url.searchParams.get('id');
+
+      if (id) {
+        return id.trim();
+      }
+
+    } catch (error) {
+      // Keine gültige URL, dann als ID verwenden.
+    }
+  }
+
+  return raw;
+}
+
+
+/* ======================================================================
+   ANSICHTEN
+   ====================================================================== */
+
+function showView(name) {
+
+  const capture = name === 'capture';
+
+  $('viewCapture').classList.toggle('active', capture);
+  $('viewQueue').classList.toggle('active', !capture);
+
+  $('tabCapture').classList.toggle('active', capture);
+  $('tabQueue').classList.toggle('active', !capture);
+
+  if (!capture) {
+    refreshQueue();
+    showStorageHint();
+  }
+
+  window.scrollTo(0, 0);
+}
+
+function updateNetworkPill() {
+
+  const pill = $('netPill');
+
+  if (navigator.onLine) {
+    pill.textContent = 'Online';
+    pill.className = 'pill';
+  } else {
+    pill.textContent = 'Offline';
+    pill.className = 'pill offline';
+  }
+}
+
+async function showStorageHint() {
+
+  const hint = $('storageHint');
+
+  if (!navigator.storage || !navigator.storage.estimate) {
+    hint.textContent = '';
+    return;
+  }
+
+  try {
+
+    const estimate = await navigator.storage.estimate();
+
+    const freeMb = Math.round(((estimate.quota || 0) - (estimate.usage || 0)) / 1048576);
+
+    const persisted = navigator.storage.persisted
+      ? await navigator.storage.persisted()
+      : false;
+
+    hint.textContent = 'Freier Speicher: etwa ' + freeMb + ' MB' +
+      (persisted ? ' · Daten sind dauerhaft gesichert' :
+        ' · Hinweis: Der Browser darf Daten löschen, wenn der Speicher knapp wird');
+
+  } catch (error) {
+    hint.textContent = '';
+  }
+}
+
+
+/* ======================================================================
+   START
+   ====================================================================== */
+
+async function init() {
+
+  updateNetworkPill();
+
+  // Bittet den Browser, die Warteschlange nicht selbstständig zu löschen.
+  if (navigator.storage && navigator.storage.persist) {
+
+    try {
+
+      if (!(await navigator.storage.persisted())) {
+        await navigator.storage.persist();
+      }
+
+    } catch (error) {
+      // Nicht unterstützt, kein Problem.
+    }
+  }
+
+  await loadDeviceList();
+
+  const params = new URLSearchParams(location.search);
+
+  if (params.get('id')) {
+    setDeviceId(params.get('id'));
+
+    // ID aus der Adresszeile entfernen, damit ein Neuladen sie nicht
+    // erneut setzt, nachdem das Gerät gewechselt wurde.
+    history.replaceState(null, '', location.pathname);
+  }
+
+  updateSaveButton();
+
+  startGeoWatch();
+
+  await refreshQueue();
+
+  refreshDeviceList();
+
+  syncNow(false);
+}
+
+window.addEventListener('online', function () {
+  updateNetworkPill();
+  refreshDeviceList();
+  syncNow(false);
+});
+
+window.addEventListener('offline', updateNetworkPill);
+
+document.addEventListener('visibilitychange', function () {
+
+  if (document.visibilityState === 'visible') {
+    startGeoWatch();
+    updateNetworkPill();
+    syncNow(false);
+  } else {
+    stopGeoWatch();
+  }
+});
+
+// Regelmäßiger Versuch, solange die App offen ist.
+setInterval(function () {
+  if (navigator.onLine) {
+    syncNow(false);
+  }
+}, 60000);
+
+window.addEventListener('load', init);
+
+
+/* ======================================================================
+   SERVICE WORKER
+   ====================================================================== */
+
+if ('serviceWorker' in navigator) {
+
+  window.addEventListener('load', function () {
+
+    navigator.serviceWorker.register('sw.js').then(function (registration) {
+
+      registration.addEventListener('updatefound', function () {
+
+        const worker = registration.installing;
+
+        if (!worker) {
+          return;
+        }
+
+        worker.addEventListener('statechange', function () {
+
+          if (worker.state === 'installed' && navigator.serviceWorker.controller) {
+            $('updateBar').style.display = 'block';
+          }
+        });
+      });
+
+    }).catch(function () {
+      // Ohne Service Worker läuft die App weiter, nur nicht offline.
+    });
+  });
+}
+
+</script>
+
+</body>
+
+</html>
