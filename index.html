@@ -261,6 +261,20 @@
     margin-top: 6px;
   }
 
+  .diag {
+    display: none;
+    margin: 12px 0 0;
+    padding: 12px;
+    background: #263238;
+    color: #eceff1;
+    border-radius: 10px;
+    font-family: ui-monospace, Menlo, Consolas, monospace;
+    font-size: 13px;
+    line-height: 1.55;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
   /* =========================
      STATUS UND KNÖPFE
      ========================= */
@@ -631,6 +645,19 @@
 
     <div class="hint" id="storageHint"></div>
 
+    <div class="section">
+
+      <div class="section-title">Verbindung</div>
+
+      <div class="button-row" style="margin-top:0;">
+        <button class="secondary" onclick="testConnection()">Verbindung testen</button>
+        <button class="secondary" onclick="refreshDeviceList(true)">Geräteliste laden</button>
+      </div>
+
+      <pre id="diagOutput" class="diag"></pre>
+
+    </div>
+
   </div>
 
 </div>
@@ -678,7 +705,7 @@
 const CONFIG = {
 
   // Die /exec-Adresse der Apps-Script-Web-App.
-  apiUrl: 'https://script.google.com/macros/s/AKfycbzU9uamZu-h9yJLW_yAac4-qgp0TD4cfbsICjSQ-0Ym5YdZa5YNcynd_dWwU9DydPrJ/exec',
+  apiUrl: 'https://script.google.com/macros/s/AKfycbwrg0MvK6u9TvLs_6jblG4Th3hwBGCsyeCvymdDFBQ6Tv7P6mD8VEph3TgLpD-gtudW/exec',
 
   // Muss exakt mit API_TOKEN in Code.gs übereinstimmen.
   token: '04a519d02e0f2218389da6ce4d169662d0582bd285c9627a',
@@ -895,7 +922,120 @@ function ApiError(message, permanent) {
 
 ApiError.prototype = Object.create(Error.prototype);
 
+/** Säubert die Adresse, falls beim Einfügen Leerzeichen mitkamen. */
+function apiUrl() {
+
+  return String(CONFIG.apiUrl || '').trim().replace(/^["'<]+|["'>]+$/g, '');
+}
+
+function apiToken() {
+
+  return String(CONFIG.token || '').trim();
+}
+
+/**
+ * Konfigurationsfehler, die jeden Aufruf scheitern lassen.
+ * Normalerweise eine leere Liste.
+ */
+function configProblems() {
+
+  const problems = [];
+
+  const url = apiUrl();
+  const token = apiToken();
+
+  if (!url || url.indexOf('HIER_') !== -1) {
+
+    problems.push('Die Adresse der Web-App ist in CONFIG.apiUrl noch nicht eingetragen.');
+
+  } else if (/\/dev(\?|$)/.test(url)) {
+
+    problems.push('CONFIG.apiUrl endet auf /dev. Diese Testadresse verlangt eine ' +
+      'Google-Anmeldung und funktioniert im Feld nie. Bitte die /exec-Adresse ' +
+      'aus der Bereitstellung eintragen.');
+  }
+
+  if (!token || token.indexOf('HIER_') !== -1) {
+    problems.push('Das Token ist in CONFIG.token noch nicht eingetragen.');
+  }
+
+  return problems;
+}
+
+/**
+ * Wertet die Serverantwort aus und benennt die typischen Fehlerursachen,
+ * statt sie zu verschlucken.
+ */
+async function readApiResponse(response) {
+
+  if (response.status === 401 || response.status === 403) {
+
+    throw new ApiError('Google verweigert den Zugriff (Status ' + response.status +
+      '). Die Bereitstellung muss auf Zugriff "Jeder" stehen.', false);
+  }
+
+  if (!response.ok) {
+    throw new ApiError('Der Server antwortet mit Fehler ' + response.status + '.', false);
+  }
+
+  const text = (await response.text()).trim();
+
+  if (!text) {
+    throw new ApiError('Der Server hat eine leere Antwort geliefert.', false);
+  }
+
+  // Eine HTML-Seite an dieser Stelle ist fast immer die Google-Anmeldeseite.
+  if (text.charAt(0) === '<') {
+
+    throw new ApiError('Der Server liefert eine HTML-Seite statt Daten. Das ist ' +
+      'fast immer die Google-Anmeldung: Bereitstellung auf Zugriff "Jeder" ' +
+      'stellen und die /exec-Adresse neu kopieren.', false);
+  }
+
+  let data;
+
+  try {
+    data = JSON.parse(text);
+  } catch (parseError) {
+    throw new ApiError('Die Antwort des Servers ist unlesbar.', false);
+  }
+
+  if (!data.ok) {
+    throw new ApiError(data.error || 'Unbekannter Serverfehler', !!data.permanent);
+  }
+
+  return data;
+}
+
+/** Übersetzt Netzfehler in eine Meldung, mit der man etwas anfangen kann. */
+function networkError(error) {
+
+  if (error instanceof ApiError) {
+    return error;
+  }
+
+  if (error && error.name === 'AbortError') {
+    return new ApiError('Zeitüberschreitung. Die Verbindung ist zu langsam.', false);
+  }
+
+  if (!navigator.onLine) {
+    return new ApiError('Offline. Der Upload läuft automatisch weiter, ' +
+      'sobald wieder Netz da ist.', false);
+  }
+
+  return new ApiError('Server nicht erreichbar. Häufigste Ursachen: Zugriff der ' +
+    'Bereitstellung steht nicht auf "Jeder", die /exec-Adresse ist veraltet, ' +
+    'oder das Netz ist zu schwach. (' +
+    ((error && error.message) || 'Netzwerkfehler') + ')', false);
+}
+
 async function apiPost(payload, timeoutMs) {
+
+  const problems = configProblems();
+
+  if (problems.length) {
+    throw new ApiError(problems[0], false);
+  }
 
   const controller = new AbortController();
 
@@ -904,9 +1044,9 @@ async function apiPost(payload, timeoutMs) {
 
   try {
 
-    const body = Object.assign({ token: CONFIG.token }, payload);
+    const body = Object.assign({ token: apiToken() }, payload);
 
-    const response = await fetch(CONFIG.apiUrl, {
+    const response = await fetch(apiUrl(), {
       method: 'POST',
       // text/plain vermeidet den CORS-Preflight, den Apps Script
       // nicht beantworten kann. Der Inhalt bleibt JSON.
@@ -916,40 +1056,53 @@ async function apiPost(payload, timeoutMs) {
       signal: controller.signal
     });
 
-    if (!response.ok) {
-      throw new ApiError('Server antwortet mit Fehler ' + response.status, false);
-    }
-
-    const text = await response.text();
-
-    let data;
-
-    try {
-      data = JSON.parse(text);
-    } catch (parseError) {
-      throw new ApiError(
-        'Unerwartete Antwort. Ist die Web-App für "Jeder" freigegeben?',
-        false
-      );
-    }
-
-    if (!data.ok) {
-      throw new ApiError(data.error || 'Unbekannter Serverfehler', !!data.permanent);
-    }
-
-    return data;
+    return await readApiResponse(response);
 
   } catch (error) {
 
-    if (error instanceof ApiError) {
-      throw error;
-    }
+    throw networkError(error);
 
-    if (error.name === 'AbortError') {
-      throw new ApiError('Zeitüberschreitung beim Hochladen.', false);
-    }
+  } finally {
 
-    throw new ApiError('Keine Verbindung zum Server.', false);
+    clearTimeout(timer);
+  }
+}
+
+/** Gleicher Aufruf als GET – nur für den Verbindungstest. */
+async function apiGet(params, timeoutMs) {
+
+  const problems = configProblems();
+
+  if (problems.length) {
+    throw new ApiError(problems[0], false);
+  }
+
+  const controller = new AbortController();
+
+  const timer = setTimeout(function () { controller.abort(); },
+    timeoutMs || 20000);
+
+  try {
+
+    const query = Object.keys(params).map(function (key) {
+      return encodeURIComponent(key) + '=' + encodeURIComponent(params[key]);
+    }).join('&');
+
+    const url = apiUrl();
+
+    const separator = url.indexOf('?') === -1 ? '?' : '&';
+
+    const response = await fetch(url + separator + query, {
+      method: 'GET',
+      redirect: 'follow',
+      signal: controller.signal
+    });
+
+    return await readApiResponse(response);
+
+  } catch (error) {
+
+    throw networkError(error);
 
   } finally {
 
@@ -982,6 +1135,8 @@ function blobToBase64(blob) {
 
 let currentDeviceId = '';
 let deviceList = [];
+let deviceListError = '';
+let deviceListLoadedAt = '';
 let selectedImages = [];
 let lastSavedId = '';
 let syncing = false;
@@ -1000,15 +1155,26 @@ async function loadDeviceList() {
 
   if (stored && Array.isArray(stored.value)) {
     deviceList = stored.value;
+    deviceListLoadedAt = stored.updatedAt || '';
   }
 
   updateDeviceName();
 }
 
-async function refreshDeviceList() {
+/**
+ * Holt die Geräteliste vom Server.
+ * showResult = true: der Benutzer hat es angestoßen und bekommt eine Rückmeldung.
+ */
+async function refreshDeviceList(showResult) {
 
-  if (!navigator.onLine) {
-    return;
+  if (!navigator.onLine && !showResult) {
+
+    if (deviceList.length === 0) {
+      deviceListError = 'Gerät ist offline.';
+      updateDeviceName();
+    }
+
+    return false;
   }
 
   try {
@@ -1016,17 +1182,35 @@ async function refreshDeviceList() {
     const data = await apiPost({ type: 'devices' }, 20000);
 
     deviceList = data.devices || [];
+    deviceListError = '';
+    deviceListLoadedAt = new Date().toISOString();
 
     await dbPut('meta', {
       key: 'devices',
       value: deviceList,
-      updatedAt: new Date().toISOString()
+      updatedAt: deviceListLoadedAt
     });
 
     updateDeviceName();
 
+    if (showResult) {
+      window.alert('Geräteliste geladen: ' + deviceList.length + ' Geräte.');
+    }
+
+    return true;
+
   } catch (error) {
-    // Ohne Verbindung bleibt die zuletzt gespeicherte Liste gültig.
+
+    // Eine bereits gespeicherte Liste bleibt gültig, der Grund wird gemerkt.
+    deviceListError = error.message;
+
+    updateDeviceName();
+
+    if (showResult) {
+      window.alert('Geräteliste konnte nicht geladen werden.\n\n' + error.message);
+    }
+
+    return false;
   }
 }
 
@@ -1048,6 +1232,9 @@ function updateDeviceName() {
   const box = $('deviceBox');
   const nameBox = $('deviceName');
 
+  nameBox.onclick = null;
+  nameBox.style.cursor = '';
+
   if (!currentDeviceId) {
 
     box.textContent = 'Kein Gerät ausgewählt';
@@ -1063,15 +1250,36 @@ function updateDeviceName() {
   const device = findDevice(currentDeviceId);
 
   if (device) {
-    nameBox.textContent = device.name || '';
+    nameBox.textContent = device.name || '(ohne Bezeichnung)';
     nameBox.className = 'name';
-  } else if (deviceList.length === 0) {
-    nameBox.textContent = 'Geräteliste noch nicht geladen';
-    nameBox.className = 'name warn';
-  } else {
-    nameBox.textContent = 'Nicht in der Geräteliste – bitte ID prüfen';
-    nameBox.className = 'name warn';
+    nameBox.title = '';
+    return;
   }
+
+  nameBox.className = 'name warn';
+
+  if (deviceList.length > 0) {
+    nameBox.textContent = 'Nicht in der Geräteliste – Speichern trotzdem möglich';
+    nameBox.title = '';
+    return;
+  }
+
+  if (deviceListError) {
+
+    nameBox.textContent = 'Ohne Geräteliste – tippen für Details';
+    nameBox.title = deviceListError;
+    nameBox.style.cursor = 'pointer';
+
+    nameBox.onclick = function () {
+      showView('queue');
+      testConnection();
+    };
+
+    return;
+  }
+
+  nameBox.textContent = 'Geräteliste wird geladen …';
+  nameBox.title = '';
 }
 
 function setDeviceId(value) {
@@ -2091,6 +2299,106 @@ function updateNetworkPill() {
   } else {
     pill.textContent = 'Offline';
     pill.className = 'pill offline';
+  }
+}
+
+/**
+ * Prüft die Kette Konfiguration → Netz → POST → GET → Geräteliste
+ * und benennt die erste Stelle, an der es klemmt.
+ */
+async function testConnection() {
+
+  const box = $('diagOutput');
+
+  const lines = [];
+
+  box.style.display = 'block';
+  box.textContent = 'Prüfung läuft …';
+
+  function log(text) {
+    lines.push(text);
+    box.textContent = lines.join('\n');
+  }
+
+  const problems = configProblems();
+
+  if (problems.length) {
+
+    problems.forEach(function (problem) { log('✗ ' + problem); });
+
+    log('');
+    log('Beide Werte stehen in index.html oben im Block CONFIG.');
+
+    return;
+  }
+
+  log('✓ apiUrl und token sind eingetragen');
+
+  const url = apiUrl();
+
+  if (url.indexOf('https://script.google.com/') !== 0) {
+    log('! Die Adresse zeigt nicht auf script.google.com');
+  }
+
+  if (!/\/exec$/.test(url.split('?')[0])) {
+    log('! Die Adresse endet nicht auf /exec');
+  }
+
+  if (!navigator.onLine) {
+    log('✗ Das Gerät ist offline. Ein Test ist so nicht möglich.');
+    return;
+  }
+
+  log('✓ Gerät ist online');
+
+  let postOk = false;
+
+  try {
+
+    const result = await apiPost({ type: 'ping' }, 20000);
+
+    postOk = true;
+
+    log('✓ Upload-Weg steht. Serverzeit: ' + formatDateTime(result.time));
+
+  } catch (error) {
+    log('✗ Upload-Weg (POST): ' + error.message);
+  }
+
+  try {
+
+    const result = await apiGet({ type: 'ping', token: apiToken() }, 20000);
+
+    log('✓ Testabruf (GET) erfolgreich, ' + result.devices + ' Geräte in der Tabelle');
+
+    if (!postOk) {
+      log('! GET funktioniert, POST nicht. Meist fehlt doPost in der ' +
+        'veröffentlichten Version: Bereitstellung bearbeiten und Version "Neu" wählen.');
+    }
+
+  } catch (error) {
+    log('✗ Testabruf (GET): ' + error.message);
+  }
+
+  if (!postOk) {
+
+    log('');
+    log('Checkliste:');
+    log('1. Apps Script → Bereitstellen → Bereitstellungen verwalten → Bearbeiten');
+    log('   Version: Neu · Ausführen als: Ich · Zugriff: Jeder');
+    log('2. Die /exec-Adresse neu kopieren und in CONFIG.apiUrl eintragen');
+    log('3. API_TOKEN in Code.gs und CONFIG.token müssen Zeichen für Zeichen gleich sein');
+    log('4. Danach CACHE_VERSION in sw.js erhöhen, sonst lädt das Handy die alte Fassung');
+
+    return;
+  }
+
+  const loaded = await refreshDeviceList(false);
+
+  if (loaded) {
+    log('✓ Geräteliste geladen: ' + deviceList.length + ' Geräte');
+  } else {
+    log('✗ Geräteliste: ' + deviceListError);
   }
 }
 
