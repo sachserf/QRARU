@@ -6,7 +6,7 @@
  * die App schon installiert ist, weiter die alte Fassung aus.
  */
 
-const CACHE_VERSION = 'v2';
+const CACHE_VERSION = 'v8';
 
 const CACHE_NAME = 'geraete-scanner-' + CACHE_VERSION;
 
