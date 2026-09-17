@@ -6,7 +6,7 @@
  * die App schon installiert ist, weiter die alte Fassung aus.
  */
 
-const CACHE_VERSION = 'v1';
+const CACHE_VERSION = 'v2';
 
 const CACHE_NAME = 'geraete-scanner-' + CACHE_VERSION;
 
@@ -25,7 +25,7 @@ const OPTIONAL_FILES = [
 ];
 
 const SHELL_URL = new URL('index.html', self.registration.scope).href;
-
+/** const SHELL_URL = self.registration.scope; */
 
 self.addEventListener('install', function (event) {
 
