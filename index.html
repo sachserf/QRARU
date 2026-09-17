@@ -532,7 +532,7 @@
     <div id="deviceName" class="name"></div>
 
     <div class="button-row">
-      <button class="secondary" onclick="openScanner()">QR-Code scannen</button>
+      <button id="scanButton" class="secondary" onclick="openScanner()">QR-Code scannen</button>
       <button class="secondary" onclick="promptDeviceId()">ID eingeben</button>
     </div>
 
@@ -2092,6 +2092,43 @@ async function openScanner() {
   const overlay = $('scanner');
   const video = $('scannerVideo');
 
+  // Vor dem Kamerastart prüfen: eine Methode zum Lesen muss bereitstehen.
+  // Erst danach lohnt es, um Kamerazugriff zu bitten.
+  let canUseBarcodeDetector = false;
+
+  if ('BarcodeDetector' in window) {
+
+    try {
+
+      const formats = await window.BarcodeDetector.getSupportedFormats();
+
+      canUseBarcodeDetector = formats.indexOf('qr_code') !== -1;
+
+    } catch (error) {
+      canUseBarcodeDetector = false;
+    }
+  }
+
+  const canUseJsQR = typeof window.jsQR === 'function';
+
+  if (!canUseBarcodeDetector && !canUseJsQR) {
+
+    const missingFile = window.__jsqrMissing === true;
+
+    const message = missingFile
+      ? 'Dieser Browser (Firefox, Brave oder Safari) braucht die Datei ' +
+        'jsQR.js für die Kamera-Erkennung, sie fehlt aber auf diesem Server. ' +
+        'Siehe README, Abschnitt "QR-Scanning in Firefox und Brave". ' +
+        'Bis dahin bitte die Geräte-ID von Hand eingeben.'
+      : 'Dieser Browser kann QR-Codes nicht per Kamera lesen. ' +
+        'Bitte die Geräte-ID von Hand eingeben.';
+
+    window.alert(message);
+
+    promptDeviceId();
+    return;
+  }
+
   overlay.classList.add('active');
 
   $('scannerHint').textContent = 'Kamera wird gestartet …';
@@ -2119,27 +2156,8 @@ async function openScanner() {
 
   scannerActive = true;
 
-  if (!barcodeDetector && 'BarcodeDetector' in window) {
-
-    try {
-
-      const formats = await window.BarcodeDetector.getSupportedFormats();
-
-      if (formats.indexOf('qr_code') !== -1) {
-        barcodeDetector = new window.BarcodeDetector({ formats: ['qr_code'] });
-      }
-
-    } catch (error) {
-      barcodeDetector = null;
-    }
-  }
-
-  if (!barcodeDetector && typeof window.jsQR !== 'function') {
-
-    $('scannerHint').textContent =
-      'Dieser Browser kann keine QR-Codes lesen. Bitte ID von Hand eingeben.';
-
-    return;
+  if (canUseBarcodeDetector && !barcodeDetector) {
+    barcodeDetector = new window.BarcodeDetector({ formats: ['qr_code'] });
   }
 
   $('scannerHint').textContent = 'QR-Code in den Rahmen halten';
@@ -2435,6 +2453,37 @@ async function showStorageHint() {
    START
    ====================================================================== */
 
+/** Prüft beim Start, ob eine QR-Erkennung überhaupt möglich ist. */
+async function checkScanCapability() {
+
+  const button = $('scanButton');
+
+  let capable = typeof window.jsQR === 'function';
+
+  if (!capable && 'BarcodeDetector' in window) {
+
+    try {
+
+      const formats = await window.BarcodeDetector.getSupportedFormats();
+      capable = formats.indexOf('qr_code') !== -1;
+
+    } catch (error) {
+      capable = false;
+    }
+  }
+
+  if (!capable) {
+
+    button.classList.add('secondary');
+    button.title = window.__jsqrMissing
+      ? 'jsQR.js fehlt auf dem Server – siehe README'
+      : 'Dieser Browser unterstützt keine QR-Erkennung';
+
+    // Bewusst nicht deaktiviert: ein Tap erklärt in einem Alert, woran es
+    // liegt, statt den Knopf stumm zu verstecken.
+  }
+}
+
 async function init() {
 
   updateNetworkPill();
@@ -2472,6 +2521,8 @@ async function init() {
   await refreshQueue();
 
   refreshDeviceList();
+
+  checkScanCapability();
 
   syncNow(false);
 }
